@@ -3,12 +3,12 @@
 #include "nokia1100_lcd_font.h"
 #include <string.h>
 
-extern uint8_t usart_transmit_status;
-extern uint8_t nlcd_memory[NLCD_X_RES][NLCD_Y_RES/8+1]; //буффер дисплея
-extern USART_HandleTypeDef husart1;
+uint8_t volatile usart_transmit_status;
+//extern uint8_t nlcd_memory[NLCD_X_RES][NLCD_Y_RES/8+1]; //буффер дисплея
+USART_HandleTypeDef* usart;
 
 void HAL_USART_TxCpltCallback(USART_HandleTypeDef *husart) {
-	if (husart == &husart1) {
+	if (husart == usart) {
 		usart_transmit_status = 0;
 //		CS_LCD_SET;
 	}
@@ -24,7 +24,8 @@ void _delay_us(uint32_t delay1) {
 	for(uint32_t tmp3=delay1;tmp3>0;tmp3--);
 }
 
-void lcd_init(void) {
+void lcd_init(USART_HandleTypeDef* Lusart) {
+	usart = Lusart;
 	CS_LCD_RESET;
 	RST_LCD_RESET;
 	
@@ -36,9 +37,9 @@ void lcd_init(void) {
 	CS_LCD_SET;
 	_delay_ms(2);
 
-	/* nlcd_SendByte2(CMD_LCD_MODE,0xE2); // *** SOFTWARE RESET
+  nlcd_SendByte2(CMD_LCD_MODE,0xE2); // *** SOFTWARE RESET
 
-	nlcd_SendByte2(CMD_LCD_MODE,0x3A); // *** Use internal oscillator
+/*	nlcd_SendByte2(CMD_LCD_MODE,0x3A); // *** Use internal oscillator
 	nlcd_SendByte2(CMD_LCD_MODE,0xEF); // *** FRAME FREQUENCY:
 	nlcd_SendByte2(CMD_LCD_MODE,0x04); // *** 80Hz
 	nlcd_SendByte2(CMD_LCD_MODE,0xD0); // *** 1:65 divider
@@ -63,7 +64,8 @@ void lcd_init(void) {
 	nlcd_SendByte2(CMD_LCD_MODE,0xAC); // set initial row (R0) of the display
 	nlcd_SendByte2(CMD_LCD_MODE,0x07);
 	nlcd_SendByte2(CMD_LCD_MODE,0xAF); // экран вкл/выкл
-	*/
+*/	
+	
 	nlcd_SendByte2(CMD_LCD_MODE,0x2F);
 	nlcd_SendByte2(CMD_LCD_MODE,0x38);
 	nlcd_SendByte2(CMD_LCD_MODE,0xA1); // invert X
@@ -85,9 +87,8 @@ void nlcd_Clear(void)
 	nlcd_SendByte2(CMD_LCD_MODE,0x40);
 	nlcd_SendByte2(CMD_LCD_MODE,0xB0);
 	nlcd_SendByte2(CMD_LCD_MODE,0x10);
-	nlcd_SendByte2(CMD_LCD_MODE,0x00);
-	//nlcd_xcurr=0; nlcd_ycurr=0;		  // Устанавливаем в 0 текущие координаты в видеобуфере		
-	for(uint16_t tmp=0;tmp<864;tmp++) nlcd_SendByte2(DATA_LCD_MODE,0x00);
+	nlcd_SendByte2(CMD_LCD_MODE,0x00);	
+	for(uint16_t tmp=0;tmp<864;tmp++) nlcd_SendByte2(DATA_LCD_MODE,0x10);
 }
 
 /*-------------------------- GPIO ----------------------------------*/
@@ -129,14 +130,14 @@ void nlcd_SendByte2(char mode, uint8_t c) {
 	_delay_us(10);
 			while(usart_transmit_status == 1);
 			usart_transmit_status = 1;
-			HAL_USART_Transmit_IT(&husart1, tmp, 1);
-//	_delay_ms(10);
+			HAL_USART_Transmit_IT(usart, tmp, 1);
+	_delay_us(30);
 //	CS_LCD_SET;
 //	_delay_ms(3);
 }
 
 /* обновить видеобуфер */
-void nlcd_update(void) {
+void nlcd_update(uint8_t (*nlcd_mem)[NLCD_Y_RES/8+1]) {
 	uint8_t x, y;
 	nlcd_SendByte2(CMD_LCD_MODE,0x40); // Y = 0
 	nlcd_SendByte2(CMD_LCD_MODE,0xB0);
@@ -144,30 +145,30 @@ void nlcd_update(void) {
 	nlcd_SendByte2(CMD_LCD_MODE,0x00);
 	for(y=0;y<(NLCD_Y_RES/8+1);y++) {
 		for(x=0;x<NLCD_X_RES;x++) {
-			nlcd_SendByte2(DATA_LCD_MODE,nlcd_memory[x][y]);
+			nlcd_SendByte2(DATA_LCD_MODE,nlcd_mem[x][y]);
 		}
 	}
 }
 
-void nlcd_Putc(uint8_t s, uint8_t nlcd_xcurr, uint8_t nlcd_ycurr) {
+void nlcd_Putc(uint8_t s, uint8_t xcurr, uint8_t ycurr, uint8_t (*nlcd_mem)[NLCD_Y_RES/8+1]) {
 	// out of diapozon lcd
-	if ((nlcd_xcurr > (NLCD_X_RES-6)) || (nlcd_ycurr > 7)) return;
-	for (uint8_t k = 0; k < 5; k++ )
-		 nlcd_memory[k+nlcd_xcurr][nlcd_ycurr]=nlcd_Font[s][k];
+	if ((xcurr >= (NLCD_X_RES-FONT_SIZE_X)) || (ycurr >= (NLCD_Y_RES/8))) return;
+	for (uint8_t k = 0; k < FONT_SIZE_X; k++ )
+		 nlcd_mem[k+xcurr][ycurr]=nlcd_Font8[s][k];
 }
 
-void nlcd_Puts(uint8_t *s, uint8_t size_str, uint8_t nlcd_xcurr, uint8_t nlcd_ycurr) {
+void nlcd_Puts(uint8_t *s, uint8_t size_str, uint8_t xcurr, uint8_t ycurr, uint8_t (*nlcd_mem)[NLCD_Y_RES/8+1]) {
 	for (uint8_t l=0; l < size_str; l++) {
-		if (nlcd_xcurr > (NLCD_X_RES-6)) {
-			nlcd_xcurr = 0;
-			if (nlcd_ycurr > 8) return;
-			nlcd_ycurr++;
+		if (xcurr >= (NLCD_X_RES - FONT_SIZE_X)) {
+			xcurr = 0;
+			if (ycurr >= (NLCD_Y_RES/8)) return;
+			ycurr++;
 		}
-			nlcd_Putc(s[l], nlcd_xcurr, nlcd_ycurr);
-			nlcd_xcurr = nlcd_xcurr + 6;
+		nlcd_Putc(s[l], xcurr, ycurr, nlcd_mem);
+		xcurr = xcurr + FONT_CHAR_SIZE;
 	}
 }
 
-void flush_buffer(void) {
-	memset(nlcd_memory, 0x00, sizeof(nlcd_memory));
+void flush_buffer(uint8_t (*nlcd_mem)[NLCD_Y_RES/8+1]) {
+	memset(nlcd_mem, 0x00, NLCD_X_RES*(NLCD_Y_RES/8+1));
 }

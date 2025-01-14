@@ -1,7 +1,7 @@
-#define CS_LCD_RESET		GPIOB->BSRR = GPIO_BSRR_BR_5 //CS_LINE
-#define CS_LCD_SET			GPIOB->BSRR = GPIO_BSRR_BS_5 
-#define RST_LCD_RESET		GPIOB->BSRR = GPIO_BSRR_BR_4 // RESET LINE
-#define RST_LCD_SET			GPIOB->BSRR = GPIO_BSRR_BS_4
+#define CS_LCD_RESET		GPIOB->BSRR = GPIO_BSRR_BR_1 //CS_LINE
+#define CS_LCD_SET			GPIOB->BSRR = GPIO_BSRR_BS_1 
+#define RST_LCD_RESET		GPIOB->BSRR = GPIO_BSRR_BR_0 // RESET LINE
+#define RST_LCD_SET			GPIOB->BSRR = GPIO_BSRR_BS_0
 #define SDA_LCD_RESET		GPIOB->BSRR = GPIO_BSRR_BR_6 // Not use for usart mode
 #define SDA_LCD_SET			GPIOB->BSRR = GPIO_BSRR_BS_6
 #define SCLK_LCD_RESET	GPIOB->BSRR = GPIO_BSRR_BR_7 // Not use for usart mode
@@ -28,33 +28,20 @@
 
 #define NLCD_MIN_DELAY	50
 
-
-void lcd_init(void);
 void nlcd_SendByte1(char mode, uint8_t c);
 void nlcd_SendByte2(char mode, uint8_t c);
 void _delay_ms(uint32_t delay);
 void _delay_us(uint32_t delay);
 void nlcd_Clear(void);
-void nlcd_Putc(uint8_t s, uint8_t nlcd_xcurr, uint8_t nlcd_ycurr);
-void nlcd_Puts(uint8_t *s, uint8_t size_str, uint8_t nlcd_xcurr, uint8_t nlcd_ycurr);
-void nlcd_GotoXY_pix(char x,char y);
-void nlcd_update(void);
-void usart_init(void);
-void spi_init(void);
-void Usart1_Transmit(uint32_t data);
-void flush_buffer(void);
+void nlcd_Putc(uint8_t s, uint8_t xcurr, uint8_t ycurr, uint8_t (*nlcd_mem)[NLCD_Y_RES/8+1]);
+void nlcd_Puts(uint8_t *s, uint8_t size_str, uint8_t xcurr, uint8_t ycurr, uint8_t (*nlcd_mem)[NLCD_Y_RES/8+1]);
+void lcd_init(USART_HandleTypeDef* Lusart);
+void nlcd_update(uint8_t (*nlcd_mem)[NLCD_Y_RES/8+1]);
+void flush_buffer(uint8_t (*nlcd_mem)[NLCD_Y_RES/8+1]);
 
 /* Initilize usart 
 static void MX_USART1_Init(void)
 {
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
   husart1.Instance = USART1;
   husart1.Init.BaudRate = 57600;
   husart1.Init.WordLength = USART_WORDLENGTH_9B;
@@ -68,9 +55,5 @@ static void MX_USART1_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
 }
 */
